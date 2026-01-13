@@ -19,6 +19,9 @@ wandb:
 # Hydra base config
 mode: full
 primary_metric: accuracy
+run: null  # Run identifier (can be overridden via CLI)
+run_id: null  # Alternative run identifier
+results_dir: ./results  # Results directory path
 
 training:
   epochs: 12
