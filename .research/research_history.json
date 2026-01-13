@@ -705,5 +705,113 @@
     "experimental_code": "# Refined CaSE with Hierarchical Prior (CaSE-Reg+)\nimport torch\nfrom torch import nn\n\nclass CaSE_HierPrior(nn.Module):\n    def __init__(self, cin, reduction=64, min_units=16, out_mul=2.0,\n                 reg_anchor=0.01, reg_var=0.01, reg_kl=0.01, init_log_sigma=-2.0):\n        super(CaSE_HierPrior, self).__init__()\n        self.cin = cin\n        self.standardize = True\n        self.out_mul = out_mul\n        self.reg_anchor = reg_anchor\n        self.reg_var = reg_var\n        self.reg_kl = reg_kl\n        # Gamma generator network remains the same spirit as CaSE\n        hidden_features = max(min_units, cin // reduction)\n        self.gamma_generator = nn.Sequential(\n            nn.Linear(cin, hidden_features),\n            nn.SiLU(),\n            nn.Linear(hidden_features, cin),\n            nn.Sigmoid(),\n        )\n        # Learnable prior over gamma scales (log-variance)\n        self.log_sigma_gamma = nn.Parameter(torch.tensor(init_log_sigma))\n\n    def forward(self, x):\n        # Global context for gamma (mean over spatial dims as in CaSE)\n        ctx = x.mean(dim=[0,2,3], keepdim=True)  # [1, C, 1, 1] if x=[N,C,H,W]\n        gamma = self.gamma_generator(ctx.view(-1))  # [C]\n        gamma = gamma.clamp(min=0.0, max=2.0).view(1, -1, 1, 1)\n        # Anchor term: keep gamma near 1\n        anchor_loss = self.reg_anchor * torch.mean((gamma - 1.0) ** 2)\n        # Variance term across batch channels to encourage cross-task consistency\n        gamma_batch = gamma.squeeze().detach()  # [C]\n        var_loss = self.reg_var * torch.var(gamma_batch)\n        # KL divergence to a learnable prior N(1, exp(log_sigma_gamma)^2)\n        mu = gamma_batch  # per-channel mean\n        sigma = torch.exp(self.log_sigma_gamma)\n        kl_loss = 0.5 * torch.sum(((mu - 1.0) ** 2) / (sigma ** 2) + torch.log(sigma ** 2) - 1)\n        kl_loss = self.reg_kl * kl_loss / max(self.cin, 1)\n        reg_loss = anchor_loss + var_loss + kl_loss\n        self.gamma = gamma\n        return gamma * x, reg_loss\n\n# Example usage in a training step (conceptual)\n# model outputs: y, reg_loss via CaSE-like forward\n# loss = ce_loss(y, target) + reg_loss\n\n# Note: This is a compact, plug-in illustration and omits inner-loop meta-adaptation details.\n\n# The full implementation should integrate CaSE_HierPrior into the backbone at chosen blocks, accumulate reg_loss per forward, and backpropagate jointly with the classification loss across tasks.\n",
     "expected_result": "We expect CaSE-Reg+ to outperform both the CaSE baseline and CaSE-Reg on VTAB+MD and ORBIT benchmarks. Specifically, on average across the 26 VTAB+MD datasets and ORBIT personalization tasks, we predict: - Average accuracy improvement over CaSE-Reg by 0.6–1.5 percentage points and over CaSE by 1.0–2.0 percentage points. - Reduced per-dataset accuracy variance by roughly 5–15% points relative to CaSE-Reg, indicating more stable cross-domain adaptation. - Similar or slightly increased training time and MACs (due to the small additive regularization terms) compared to CaSE-Reg, with a negligible overhead (≤ 5%). - Improved cross-domain generalization when the domain shift is large (e.g., ORBIT personalization with unseen user contexts) due to hierarchy-informed regulation of per-channel gamma.",
     "expected_conclusion": "CaSE-Reg+ demonstrates that combining a learnable hierarchical prior with anchor-based and cross-task regularization yields significantly better data-efficient, cross-domain image classification than per-task gamma anchoring alone. This approach provides stronger theoretical and empirical grounding for stable context-conditioned adaptation across varied domains, enabling more reliable deployment of lightweight adapters in real-world settings with limited labeled data and distribution shifts. The plug-in nature and modest compute overhead facilitate adoption across architectures and datasets, advancing both the academic understanding and societal impact of robust, data-efficient vision systems."
+  },
+  "experimental_design": {
+    "experiment_summary": "Task: Validate that CaSE-Reg+ hierarchical prior improves cross-domain data-efficient image classification by regulating per-channel gamma in CaSE adapters across multiple domains and layers. Setup: implement CaSE-Reg+ (anchor_loss, var_loss, kl_loss with a learnable gamma prior) as a plug-in regularization for per-channel gamma scales inserted in 2–3 CaSE blocks within an EfficientNetB0-like backbone. Compare three methods on VTAB+MD (26 datasets) plus ORBIT personalization: (a) CaSE baseline, (b) CaSE-Reg (L2 anchoring toward 1), and (c) CaSE-Reg+ (hierarchical prior). Training is conducted on a single GPU (NVIDIA A100/H100 class) to satisfy resource constraints; use standard data-efficient training (CaSE-style) with a small validation sweep to set reg_anchor, reg_var, reg_kl, and domain_priors. Datasets: VTAB+MD (26 datasets) and ORBIT personalization; metrics reported per-dataset accuracy, plus average accuracy and their standard deviation across datasets. Report adaptation cost (MACs) and wall-clock training time. Ablations/variants include number/location of CaSE blocks and domain-conditioned priors. The experiment design emphasizes plug-in, computation-light regularization to improve cross-domain adaptation and data efficiency under distribution shifts while keeping inference latency near CaSE. Scale and hyperparameters are chosen to fit a single-GPU Run under the provided Runner constraints, with careful logging and reproducibility (seed, deterministic ops).",
+    "runner_config": {
+      "runner_label": [
+        "self-hosted",
+        "gpu-runner"
+      ],
+      "description": "NVIDIA A100 or H200, VRAM: 80 GB or more, RAM: 2048 GB or more"
+    },
+    "evaluation_metrics": [
+      {
+        "name": "accuracy",
+        "description": "Primary evaluation metric: per-dataset top-1 accuracy. Correctness: for each dataset, compute the proportion of correctly predicted test samples and report as a percentage. Calculation: accuracy_dataset = (# correct predictions) / (total samples). Then report mean_accuracy = average of accuracy_dataset across the 26 VTAB+MD datasets and ORBIT personalization, and std_accuracy = standard deviation of per-dataset accuracies. Task appropriateness: classification with multiple datasets of diverse domains; ensures cross-domain data efficiency and generalization. Visualizations: bar chart of per-dataset accuracy (sorted by value) and a forest/point plot showing mean ± std across datasets."
+      },
+      {
+        "name": "std_accuracy",
+        "description": "Secondary metric capturing cross-domain stability. Correctness: same per-dataset accuracies as above; Calculation: std_accuracy = sqrt(mean((accuracy_dataset - mean_accuracy)^2)) across all datasets. Task appropriateness: helps quantify consistency of adaptation across domains. Visualizations: box plot of per-dataset accuracies and a violin/box plot."
+      },
+      {
+        "name": "adaptation_cost_MACs",
+        "description": "Compute the additional MACs introduced by CaSE adapters (per forward pass) compared to a baseline backbone without adapters. Correctness: MACs computed via framework-provided profiling or a standardized MAC estimation; Report delta_MACs as (MACs_with_adapters - MACs_baseline). Calculation: delta_MACs and percentage increase. Task appropriateness: assesses computational overhead of CaSE-Reg+ relative to CaSE baseline and primary method, ensuring practicality. Visualizations: bar plot of delta_MACs across methods."
+      },
+      {
+        "name": "training_time",
+        "description": "Total wall-clock time to reach target performance or convergence criteria across datasets. Correctness: measure the cumulative training time per method; if convergence criteria differ across datasets, report time to reach target accuracy, otherwise total time per experiment; Visualizations: learning-curve style plot of accuracy vs time and/or cumulative time to reach accuracy thresholds."
+      }
+    ],
+    "models_to_use": [
+      "EfficientNetB0-5.3M"
+    ],
+    "datasets_to_use": [
+      "VTAB+MD"
+    ],
+    "proposed_method": {
+      "method_name": "CaSE-Reg+-HierPrior",
+      "description": "Refined CaSE by introducing a hierarchical, learnable prior over per-channel gamma that operates across tasks and layers, augmented with three regularization components: anchor_loss (penalizes gamma deviation from 1, as in CaSE-Reg), var_loss (penalizes high cross-task covariance/variance of gamma to promote cross-task consistency), and kl_loss (KL divergence between per-task/per-layer gamma statistics and a learnable prior N(1, sigma^2) with learnable sigma, optionally domain-conditioned p(domain)). This plug-in prior guides gamma updates to be robust to domain shift while maintaining CaSE-like inference, enabling cross-domain consistency and selective domain-specific adaptation with minimal compute overhead. The prior is learnable, enabling data-efficient cross-domain adaptation with a two-level constraint: task-level and domain-level, across multiple backbone blocks.",
+      "training_config": {
+        "learning_rate": 0.0002,
+        "batch_size": 32,
+        "epochs": 12,
+        "optimizer": "adamw",
+        "warmup_steps": 1000,
+        "weight_decay": 0.01,
+        "gradient_clip": 1.0,
+        "scheduler": "cosine",
+        "seed": 42,
+        "additional_params": "reg_anchor=0.05; reg_var=0.01; reg_kl=0.02; domain_prior='learnable'; domain_conditioned_prior=True; gamma_clamp=(0,2); num_caose_blocks=2-3"
+      },
+      "optuna_config": {
+        "enabled": true,
+        "n_trials": 20,
+        "search_spaces": [
+          {
+            "param_name": "learning_rate",
+            "distribution_type": "loguniform",
+            "low": 1e-05,
+            "high": 0.0005
+          },
+          {
+            "param_name": "reg_anchor",
+            "distribution_type": "uniform",
+            "low": 0.0,
+            "high": 0.1
+          },
+          {
+            "param_name": "reg_var",
+            "distribution_type": "uniform",
+            "low": 0.0,
+            "high": 0.1
+          },
+          {
+            "param_name": "reg_kl",
+            "distribution_type": "uniform",
+            "low": 0.0,
+            "high": 0.05
+          },
+          {
+            "param_name": "init_log_sigma",
+            "distribution_type": "uniform",
+            "low": -4.0,
+            "high": 0.0
+          }
+        ]
+      }
+    },
+    "comparative_methods": [
+      {
+        "method_name": "CaSE-Reg",
+        "description": "Baseline CaSE with L2 gamma regularization toward 1. Regularization term anchored to gamma. Training preserves CaSE inference as a plug-in adapter.",
+        "training_config": {
+          "learning_rate": 0.0002,
+          "batch_size": 32,
+          "epochs": 12,
+          "optimizer": "adamw",
+          "warmup_steps": 1000,
+          "weight_decay": 0.01,
+          "gradient_clip": 1.0,
+          "scheduler": "cosine",
+          "seed": 42,
+          "additional_params": "anchor_only=True; reg_anchor=0.01; reg_var=0.0; reg_kl=0.0"
+        },
+        "optuna_config": {
+          "enabled": false,
+          "n_trials": 0
+        }
+      }
+    ]
   }
 }
