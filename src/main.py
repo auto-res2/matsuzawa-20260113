@@ -48,6 +48,7 @@ def main(cfg: DictConfig) -> int:
     base_container = OmegaConf.to_container(cfg, resolve=True)
     final_cfg = OmegaConf.merge(OmegaConf.create(base_container), OmegaConf.create(run_overrides))
 
+    results_dir.mkdir(parents=True, exist_ok=True)
     final_cfg_path = results_dir / f"{run_id}.final.yaml"
     with open(final_cfg_path, 'w') as f:
         f.write(OmegaConf.to_yaml(final_cfg))
