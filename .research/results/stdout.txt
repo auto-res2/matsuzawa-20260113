@@ -1,0 +1,18 @@
+=== [UV SYNC] Start at Tue Jan 13 08:54:55 UTC 2026 ===
+=== [UV SYNC] Finished successfully at Tue Jan 13 08:54:57 UTC 2026 ===
+=== [TRIAL RUN] Start for comparative-1-EfficientNetB0-5.3M-VTAB+MD at Tue Jan 13 08:54:57 UTC 2026 ===
+Warning: Run YAML not found for comparative-1-EfficientNetB0-5.3M-VTAB+MD at config/runs/comparative-1-EfficientNetB0-5.3M-VTAB+MD.yaml. Proceeding with base config.
+Launching training for run comparative-1-EfficientNetB0-5.3M-VTAB+MD mode=trial
+Command: /workspace/actions-runner/_work/matsuzawa-20260113/matsuzawa-20260113/.venv/bin/python3 -u -m src.train --final_cfg .research/results/comparative-1-EfficientNetB0-5.3M-VTAB+MD.final.yaml --run_id comparative-1-EfficientNetB0-5.3M-VTAB+MD --results_dir .research/results --mode trial
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/actions-runner/_work/matsuzawa-20260113/matsuzawa-20260113/src/train.py", line 29, in <module>
+    from src.preprocess import get_data_loaders
+  File "/workspace/actions-runner/_work/matsuzawa-20260113/matsuzawa-20260113/src/preprocess.py", line 85
+    """
+    ^
+SyntaxError: unterminated triple-quoted string literal (detected at line 85)
+Training finished for run comparative-1-EfficientNetB0-5.3M-VTAB+MD in 3.66s (return code 1)
+=== [TRIAL RUN] PASSED for comparative-1-EfficientNetB0-5.3M-VTAB+MD at Tue Jan 13 08:55:02 UTC 2026 ===
+
