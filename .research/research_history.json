@@ -1,0 +1,15 @@
+{
+  "research_topic": "Data-efficient image classification methods using novel regularization and augmentation techniques",
+  "queries": [
+    "data-efficient image classification",
+    "regularization image classification few-shot",
+    "data augmentation regularization",
+    "mixup cutmix regularization",
+    "self-supervised data-efficient classification",
+    "semi-supervised image classification regularization",
+    "few-shot image augmentation",
+    "consistency regularization image classification",
+    "AutoAugment image classification",
+    "RandAugment data-efficient"
+  ]
+}
