@@ -18,12 +18,19 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 
-@hydra.main(config_path="../config", config_name="config")
+@hydra.main(config_path="../config", config_name="config", version_base="1.1")
 def main(cfg: DictConfig) -> int:
-    # Run metadata
-    run_id = str(cfg.run_id) if getattr(cfg, "run_id", None) is not None else None
+    # Allow dynamic attributes (disable struct mode)
+    OmegaConf.set_struct(cfg, False)
+    # Run metadata - support both 'run' and 'run_id' parameters
+    run_id = None
+    if getattr(cfg, "run", None) is not None:
+        run_id = str(cfg.run)
+    elif getattr(cfg, "run_id", None) is not None:
+        run_id = str(cfg.run_id)
+
     if run_id is None:
-        raise ValueError("run_id must be provided via cfg.run_id (e.g., uv run ... run_id=run-1)")
+        raise ValueError("run_id must be provided via cfg.run or cfg.run_id (e.g., uv run ... run=run-1)")
 
     results_dir = Path(str(cfg.results_dir)) if getattr(cfg, "results_dir", None) is not None else Path("./results")
     mode = str(cfg.mode) if getattr(cfg, "mode", None) is not None else "full"
