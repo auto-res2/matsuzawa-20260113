@@ -20,5 +20,5 @@ dependencies = [
     "datasets>=2.0",
 ]
 
-[tool.setuptools]
-packages = ["find:"]
+[tool.setuptools.packages.find]
+where = ["."]
