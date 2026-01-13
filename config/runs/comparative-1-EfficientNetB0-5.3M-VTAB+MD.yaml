@@ -1,0 +1,34 @@
+run_id: comparative-1-EfficientNetB0-5.3M-VTAB+MD
+method: comparative-1-CaSE-Reg
+model:
+  name: EfficientNetB0-5.3M
+dataset:
+  name: VTAB+MD
+  preprocessing:
+    resize: 224
+    crop: center
+    normalization:
+      mean: [0.485, 0.456, 0.406]
+      std: [0.229, 0.224, 0.225]
+  split_ratios:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+training:
+  learning_rate: 0.0002
+  batch_size: 32
+  epochs: 12
+  optimizer: adamw
+  warmup_steps: 1000
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  scheduler: cosine
+  seed: 42
+  anchor_only: true
+  reg_anchor: 0.01
+  reg_var: 0.0
+  reg_kl: 0.0
+optuna:
+  enabled: false
+  n_trials: 0
+  search_spaces: []
